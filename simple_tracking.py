@@ -107,22 +107,24 @@ class MultiObjectTracker:
 class Detection:
     def __init__(self, box):
         self.label = str(id(self))[:5]
-        self.pre_box = box
         self.past_dx = []
+        self.pre_box = box
         self.predict_center = calc_center(box)
         self.cnt = 0
         self.is_updated = 1
 
     def update(self, box):
-        self.is_updated = 1
-
         center = calc_center(box)
         dx = center - calc_center(self.pre_box)
         self.past_dx.append(dx)
         if len(self.past_dx) > 3:
             self.past_dx.pop(0)
 
+        self.pre_box = box
+
         self.cnt = 0
+
+        self.is_updated = 1
 
     def calc_dx(self):
         """
