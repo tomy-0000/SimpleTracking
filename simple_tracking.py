@@ -76,6 +76,9 @@ class MultiObjectTracker:
         # self.detections内の、Detection.cnt > threshold_cntとなっているDetectionを削除
         del_idx = []
         for i, detection in enumerate(self.detections):
+            detection.cnt += 1
+            detection.predict_center = (detection.center
+                                        + detection.calc_dx()*detection.cnt)
             if detection.cnt > threshold_cnt:
                 del_idx.append(i)
         for i in reversed(del_idx):
@@ -120,3 +123,13 @@ class Detection:
             self.past_dx.pop(0)
 
         self.cnt = 0
+
+    def calc_dx(self):
+        """
+        過去3つのdxの平均を返す
+        """
+
+        if self.past_dx:
+            return sum(self.past_dx)/len(self.past_dx)
+        else:
+            return 0
