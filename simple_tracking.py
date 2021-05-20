@@ -1,21 +1,27 @@
 import json
 import cv2
 import numpy as np
+from threading import Thread
+import urllib.request
+
 
 with open("./config.json") as f:
     config = json.load(f)
 threshold_dx = config["threshold_dx"]
 threshold_cnt = config["threshold_cnt"]
+frame_center = config["_line_position"]
+send_camera_id = config["send_camera_id"]
+url = config["address"]
+method = "POST"
+headers = {"Content-Type": "application/json"}
 
 def calc_center(box):
     """
     boxの中心x座標を返す
-
     Parameters
     ----------
     box: np.ndarray
         [x1, y1, x2 y2]となっている配列
-
     Returns
     ----------
     center: int
@@ -34,7 +40,6 @@ class MultiObjectTracker:
         新規の場合はself.detectionsに追加する
         self.detections内の全てのDetectionに対して、Detection.predict_centerとDetection.cntを更新する
         self.detections内の全てのDetectionに対して、Detection.cnt > threshold_cntとなっているDetectionを削除する
-
         Parameters
         ----------
         boxes: np.ndarray
@@ -53,7 +58,7 @@ class MultiObjectTracker:
                 dx = abs(center - detection.predict_center)
                 dx_matrix[i][j] = dx
 
-        # 新規のboxes 既存のself.detectionsを更新していく際に削除していき、残ったものが新規となる
+        # 新規のboxes 既存のself.detectionsを更新していく際に削除していき、残っ>たものが新規となる
         new_boxes_idx = {idx for idx in range(len(boxes))}
 
         # 既存のself.detectionsを更新
@@ -77,7 +82,7 @@ class MultiObjectTracker:
         del_idx = []
         for i, detection in enumerate(self.detections):
             detection.cnt += 1
-            detection.predict_center = (detection.center
+            detection.predict_center = (calc_center(detection.pre_box)
                                         + detection.calc_dx()*detection.cnt)
             if detection.cnt > threshold_cnt:
                 del_idx.append(i)
@@ -87,7 +92,6 @@ class MultiObjectTracker:
     def draw(self, frame):
         """
         self.detectionsのboxとlabelを描画
-
         Parameters
         ----------
         frame: np.ndarray
@@ -106,12 +110,18 @@ class MultiObjectTracker:
 
 class Detection:
     def __init__(self, box):
-        self.label = str(id(self))[:5]
+        # トラッキング用
+        self.label = str(np.random.randint(10000, 100000))[:5]
         self.past_dx = []
         self.pre_box = box
         self.predict_center = calc_center(box)
         self.cnt = 0
         self.is_updated = 1
+
+        # 送信用
+        self.init_pos = calc_center(box)
+        self.init_left = self.exist_left(calc_center(box))
+        self.is_send = 1
 
     def update(self, box):
         center = calc_center(box)
@@ -126,6 +136,47 @@ class Detection:
 
         self.is_updated = 1
 
+
+        # 既に送信済みの場合
+        if self.is_send == 0:
+            return None
+
+        if self.init_left:
+            # Left ----> Right -1
+            if not self.exist_left(center):
+                obj = {"camid": send_camera_id, "value": "-1"}
+                json_data = json.dumps(obj).encode("utf-8")
+                t = Thread(target=self.send, args=(json_data, True))
+                t.setDaemon(True)
+                t.start()
+                self.is_send = 0
+        else:
+            # Right ----> Left +1
+            if self.exist_left(center):
+                obj = {"camid": send_camera_id, "value": "1"}
+                json_data = json.dumps(obj).encode("utf-8")
+                t = Thread(target=self.send, args=(json_data, False))
+                t.setDaemon(True)
+                t.start()
+                self.is_send = 0
+
+    def send(self, json_data, l2r):
+        try:
+            if l2r:
+                s = "Left ----> Right"
+            else:
+                s = "Right ----> Left"
+            # httpリクエストを準備してPOST
+            request = urllib.request.Request(url, data=json_data, method=method, headers=headers)
+            with urllib.request.urlopen(request) as response:
+                response_body = response.read().decode("utf-8")
+                if "true" in response_body:
+                    print(f"{s} Data sent success!")
+                else:
+                    print(f"{s} Data sent Fail!")
+        except Exception as e:
+            print(e)
+
     def calc_dx(self):
         """
         過去3つのdxの平均を返す
@@ -135,3 +186,6 @@ class Detection:
             return sum(self.past_dx)/len(self.past_dx)
         else:
             return 0
+
+    def exist_left(self, center):
+        return center < frame_center
