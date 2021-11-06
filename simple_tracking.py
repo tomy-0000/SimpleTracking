@@ -17,6 +17,7 @@ def calc_center(box):
     ----------
     box: np.ndarray
         [x1, y1, x2 y2]となっている配列
+
     Returns
     ----------
     center: int
@@ -106,7 +107,6 @@ class MultiObjectTracker:
 
 class Detection:
     def __init__(self, box):
-        # トラッキング用
         self.label = str(np.random.randint(10000, 100000))[:5]
         self.past_dx = []
         self.pre_box = box
