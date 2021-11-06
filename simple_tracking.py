@@ -52,24 +52,24 @@ class MultiObjectTracker:
                 dx_matrix[i][j] = dx
 
         # 新規のboxes 既存のself.detectionsを更新していく際に削除し、残ったものが新規となる
-        new_boxes_idx = {idx for idx in range(len(boxes))}
+        idxes = {idx for idx in range(len(boxes))}
 
         # 既存のself.detectionsを更新
         if dx_matrix.size:
             for _ in range(len(boxes)):
                 min_idx = np.unravel_index(np.argmin(dx_matrix), dx_matrix.shape)
                 if dx_matrix[min_idx] < self.threshold_dx:
-                    box_idx, detection_idx = min_idx[0], min_idx[1]
-                    self.detections[detection_idx].update(boxes[box_idx])
-                    new_boxes_idx.discard(box_idx)
-                    dx_matrix[box_idx, :] = self.threshold_dx
+                    idx, detection_idx = min_idx[0], min_idx[1]
+                    self.detections[detection_idx].update(boxes[idx])
+                    idxes.discard(idx)
+                    dx_matrix[idx, :] = self.threshold_dx
                     dx_matrix[:, detection_idx] = self.threshold_dx
                 else:
                     break
 
         # 新規のboxesをself.detectionsに追加
-        for box_idx in new_boxes_idx:
-            self.detections.append(Detection(boxes[box_idx]))
+        for idx in idxes:
+            self.detections.append(Detection(boxes[idx]))
 
         # self.detections内の、Detection.cnt > threshold_cntとなっているDetectionを削除
         del_idx = []
