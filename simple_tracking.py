@@ -1,23 +1,18 @@
 import json
+
 import cv2
 import numpy as np
-from threading import Thread
-import urllib.request
-
 
 with open("./config.json") as f:
     config = json.load(f)
 threshold_dx = config["threshold_dx"]
 threshold_cnt = config["threshold_cnt"]
-frame_center = config["_line_position"]
-send_camera_id = config["send_camera_id"]
-url = config["address"]
-method = "POST"
-headers = {"Content-Type": "application/json"}
+
 
 def calc_center(box):
     """
     boxの中心x座標を返す
+
     Parameters
     ----------
     box: np.ndarray
@@ -27,8 +22,9 @@ def calc_center(box):
     center: int
         boxの中心x座標
     """
-    center = box[0] + (box[2] - box[0])//2
+    center = box[0] + (box[2] - box[0]) // 2
     return center
+
 
 class MultiObjectTracker:
     def __init__(self):
@@ -40,6 +36,7 @@ class MultiObjectTracker:
         新規の場合はself.detectionsに追加する
         self.detections内の全てのDetectionに対して、Detection.predict_centerとDetection.cntを更新する
         self.detections内の全てのDetectionに対して、Detection.cnt > threshold_cntとなっているDetectionを削除する
+
         Parameters
         ----------
         boxes: np.ndarray
@@ -58,7 +55,7 @@ class MultiObjectTracker:
                 dx = abs(center - detection.predict_center)
                 dx_matrix[i][j] = dx
 
-        # 新規のboxes 既存のself.detectionsを更新していく際に削除していき、残っ>たものが新規となる
+        # 新規のboxes 既存のself.detectionsを更新していく際に削除し、残ったものが新規となる
         new_boxes_idx = {idx for idx in range(len(boxes))}
 
         # 既存のself.detectionsを更新
@@ -82,8 +79,7 @@ class MultiObjectTracker:
         del_idx = []
         for i, detection in enumerate(self.detections):
             detection.cnt += 1
-            detection.predict_center = (calc_center(detection.pre_box)
-                                        + detection.calc_dx()*detection.cnt)
+            detection.predict_center = calc_center(detection.pre_box) + detection.calc_dx() * detection.cnt
             if detection.cnt > threshold_cnt:
                 del_idx.append(i)
         for i in reversed(del_idx):
@@ -92,6 +88,7 @@ class MultiObjectTracker:
     def draw(self, frame):
         """
         self.detectionsのboxとlabelを描画
+
         Parameters
         ----------
         frame: np.ndarray
@@ -101,12 +98,11 @@ class MultiObjectTracker:
             if not detection.is_updated:  # 現在のフレームで検出されなかった場合はcontinue
                 continue
             label = detection.label
-            color = [ord(c)*ord(c) % 256 for c in label[:3]]
+            color = [ord(c) * ord(c) % 256 for c in label[:3]]
             box = [int(i) for i in detection.pre_box]
-            cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), color,
-                          thickness=4)
-            cv2.putText(frame, label[:5], (box[0], box[1] - 7),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, color=color)
+            cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), color, thickness=4)
+            cv2.putText(frame, label[:5], (box[0], box[1] - 7), cv2.FONT_HERSHEY_SIMPLEX, 1, color=color)
+
 
 class Detection:
     def __init__(self, box):
@@ -117,11 +113,6 @@ class Detection:
         self.predict_center = calc_center(box)
         self.cnt = 0
         self.is_updated = 1
-
-        # 送信用
-        self.init_pos = calc_center(box)
-        self.init_left = self.exist_left(calc_center(box))
-        self.is_send = 1
 
     def update(self, box):
         center = calc_center(box)
@@ -136,56 +127,12 @@ class Detection:
 
         self.is_updated = 1
 
-
-        # 既に送信済みの場合
-        if self.is_send == 0:
-            return None
-
-        if self.init_left:
-            # Left ----> Right -1
-            if not self.exist_left(center):
-                obj = {"camid": send_camera_id, "value": "-1"}
-                json_data = json.dumps(obj).encode("utf-8")
-                t = Thread(target=self.send, args=(json_data, True))
-                t.setDaemon(True)
-                t.start()
-                self.is_send = 0
-        else:
-            # Right ----> Left +1
-            if self.exist_left(center):
-                obj = {"camid": send_camera_id, "value": "1"}
-                json_data = json.dumps(obj).encode("utf-8")
-                t = Thread(target=self.send, args=(json_data, False))
-                t.setDaemon(True)
-                t.start()
-                self.is_send = 0
-
-    def send(self, json_data, l2r):
-        try:
-            if l2r:
-                s = "Left ----> Right"
-            else:
-                s = "Right ----> Left"
-            # httpリクエストを準備してPOST
-            request = urllib.request.Request(url, data=json_data, method=method, headers=headers)
-            with urllib.request.urlopen(request) as response:
-                response_body = response.read().decode("utf-8")
-                if "true" in response_body:
-                    print(f"{s} Data sent success!")
-                else:
-                    print(f"{s} Data sent Fail!")
-        except Exception as e:
-            print(e)
-
     def calc_dx(self):
         """
         過去3つのdxの平均を返す
         """
 
         if self.past_dx:
-            return sum(self.past_dx)/len(self.past_dx)
+            return sum(self.past_dx) / len(self.past_dx)
         else:
             return 0
-
-    def exist_left(self, center):
-        return center < frame_center
