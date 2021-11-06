@@ -1,12 +1,8 @@
-import json
-
 import cv2
 import numpy as np
 
-with open("./config.json") as f:
-    config = json.load(f)
-threshold_dx = config["threshold_dx"]
-threshold_cnt = config["threshold_cnt"]
+threshold_dx = 30
+threshold_cnt = 3
 
 
 def calc_center(box):
