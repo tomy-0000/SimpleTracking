@@ -21,7 +21,7 @@ def calc_center(box):
 
 
 class MultiObjectTracker:
-    def __init__(self, threshold_dx=30, self.=3):
+    def __init__(self, threshold_dx=30, threshold_cnt=3):
         self.detections = []
         self.threshold_dx = threshold_dx
         self.threshold_cnt = threshold_cnt
