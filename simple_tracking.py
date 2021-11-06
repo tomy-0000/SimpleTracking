@@ -1,9 +1,6 @@
 import cv2
 import numpy as np
 
-threshold_dx = 30
-threshold_cnt = 3
-
 
 def calc_center(box):
     """
@@ -24,8 +21,10 @@ def calc_center(box):
 
 
 class MultiObjectTracker:
-    def __init__(self):
+    def __init__(self, threshold_dx=30, self.=3):
         self.detections = []
+        self.threshold_dx = threshold_dx
+        self.threshold_cnt = threshold_cnt
 
     def update(self, boxes):
         """
@@ -45,7 +44,7 @@ class MultiObjectTracker:
             detection.is_updated = 0
 
         # dx_matrixの作成 検出したboxesと既に検出しているself.detectionsとの距離を全ての組み合わせで求める
-        dx_matrix = np.full((len(boxes), len(self.detections)), threshold_dx)
+        dx_matrix = np.full((len(boxes), len(self.detections)), self.threshold_dx)
         for i, box in enumerate(boxes):
             center = calc_center(box)
             for j, detection in enumerate(self.detections):
@@ -59,12 +58,12 @@ class MultiObjectTracker:
         if dx_matrix.size:
             for _ in range(len(boxes)):
                 min_idx = np.unravel_index(np.argmin(dx_matrix), dx_matrix.shape)
-                if dx_matrix[min_idx] < threshold_dx:
+                if dx_matrix[min_idx] < self.threshold_dx:
                     box_idx, detection_idx = min_idx[0], min_idx[1]
                     self.detections[detection_idx].update(boxes[box_idx])
                     new_boxes_idx.discard(box_idx)
-                    dx_matrix[box_idx, :] = threshold_dx
-                    dx_matrix[:, detection_idx] = threshold_dx
+                    dx_matrix[box_idx, :] = self.threshold_dx
+                    dx_matrix[:, detection_idx] = self.threshold_dx
                 else:
                     break
 
@@ -77,7 +76,7 @@ class MultiObjectTracker:
         for i, detection in enumerate(self.detections):
             detection.cnt += 1
             detection.predict_center = calc_center(detection.pre_box) + detection.calc_dx() * detection.cnt
-            if detection.cnt > threshold_cnt:
+            if detection.cnt > self.threshold_cnt:
                 del_idx.append(i)
         for i in reversed(del_idx):
             self.detections.pop(i)
